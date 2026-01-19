@@ -2,13 +2,27 @@ class ResponsiveDOMMover {
     static version = '3.1.0'
 
     static breakpoints = {
-        mobile: '(max-width: 767px)',
-        tablet: '(min-width: 768px) and (max-width: 991px)',
-        desktop: '(min-width: 992px)',
-        wide: '(min-width: 1200px)',
+        mobile: '(max-width: 47.999rem)',                 // < md
+        tablet: '(min-width: 48rem) and (max-width: 63.999rem)', // md only
+        desktop: '(min-width: 64rem)',                    // lg+
+        wide: '(min-width: 80rem)',                       // xl+
+
+        sm: '(min-width: 40rem)',
+        md: '(min-width: 48rem)',
+        lg: '(min-width: 64rem)',
+        xl: '(min-width: 80rem)',
+        '2xl': '(min-width: 96rem)',
+
+        'not-sm': '(max-width: 39.999rem)',
+        'not-md': '(max-width: 47.999rem)',
+        'not-lg': '(max-width: 63.999rem)',
+        'not-xl': '(max-width: 79.999rem)',
+        'not-2xl': '(max-width: 95.999rem)',
+
         portrait: '(orientation: portrait)',
-        landscape: '(orientation: landscape)'
+        landscape: '(orientation: landscape)',
     }
+
 
     static init(rules, options = {}) {
         return new ResponsiveDOMMover(rules, options)
@@ -1482,10 +1496,10 @@ if (typeof window !== 'undefined') {
     if (document.currentScript && document.currentScript.dataset.autoInit === 'true') {
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', () => {
-                ResponsiveDOMMover.fromDOM({ debug: document.currentScript.dataset.debug === 'true' })
+                ResponsiveDOMMover.fromDOM({ debug: document?.currentScript?.dataset?.debug === 'true' })
             })
         } else {
-            ResponsiveDOMMover.fromDOM({ debug: document.currentScript.dataset.debug === 'true' })
+            ResponsiveDOMMover.fromDOM({ debug: document?.currentScript?.dataset?.debug === 'true' })
         }
     }
 }
