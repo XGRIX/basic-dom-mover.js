@@ -1,12 +1,5 @@
-/**
- * ResponsiveDOMMover - Advanced responsive DOM manipulation library
- * @version 3.0.0
- * @author GRIX
- * @license MIT
- */
-
 class ResponsiveDOMMover {
-    static version = '3.0.0'
+    static version = '3.1.0'
 
     static breakpoints = {
         mobile: '(max-width: 767px)',
@@ -17,165 +10,17 @@ class ResponsiveDOMMover {
         landscape: '(orientation: landscape)'
     }
 
-    static breakpointCallbacks = new Map()
-
-    static templates = {}
-
-    static previewMode = false
-    static previewDevices = []
-
-    static onBreakpoint(breakpointName, callback) {
-        const query = this.breakpoints[breakpointName]
-        if (!query) {
-            console.error('Unknown breakpoint:', breakpointName)
-            return
-        }
-
-        if (!this.breakpointCallbacks.has(breakpointName)) {
-            this.breakpointCallbacks.set(breakpointName, [])
-
-            const mql = matchMedia(query)
-            mql.addEventListener('change', (e) => {
-                if (e.matches) {
-                    const callbacks = this.breakpointCallbacks.get(breakpointName) || []
-                    callbacks.forEach(cb => cb({ breakpoint: breakpointName, query, mql }))
-                }
-            })
-
-            if (mql.matches) {
-                setTimeout(() => {
-                    const callbacks = this.breakpointCallbacks.get(breakpointName) || []
-                    callbacks.forEach(cb => cb({ breakpoint: breakpointName, query, mql }))
-                }, 0)
-            }
-        }
-
-        this.breakpointCallbacks.get(breakpointName).push(callback)
-    }
-
-    static defineTemplate(name, template) {
-        this.templates[name] = template
-    }
-
-    static preview(options = {}) {
-        const devices = options.devices || ['mobile', 'tablet', 'desktop']
-        const showInPanel = options.showInPanel !== false
-
-        if (this.previewMode) {
-            console.warn('Preview mode already active')
-            return
-        }
-
-        this.previewMode = true
-        this.previewDevices = devices
-
-        if (showInPanel) {
-            this._createPreviewPanel(devices, options)
-        }
-    }
-
-    static _createPreviewPanel(devices, options) {
-        const panel = document.createElement('div')
-        panel.id = 'rdm-preview-panel'
-        panel.style.cssText = `
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0,0,0,0.9);
-      z-index: 999999;
-      display: flex;
-      flex-direction: column;
-      padding: 20px;
-    `
-
-        const header = document.createElement('div')
-        header.style.cssText = 'color: white; padding: 10px; display: flex; justify-content: space-between; align-items: center;'
-        header.innerHTML = `
-      <h2 style="margin: 0;">ResponsiveDOMMover Preview</h2>
-      <button onclick="ResponsiveDOMMover.closePreview()" style="background: #f44336; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer;">Close</button>
-    `
-
-        const iframeContainer = document.createElement('div')
-        iframeContainer.style.cssText = `
-      display: grid;
-      grid-template-columns: repeat(${devices.length}, 1fr);
-      gap: 20px;
-      flex: 1;
-      overflow: hidden;
-    `
-
-        const deviceSizes = {
-            mobile: { width: 375, height: 667, label: 'Mobile (375x667)' },
-            tablet: { width: 768, height: 1024, label: 'Tablet (768x1024)' },
-            desktop: { width: 1920, height: 1080, label: 'Desktop (1920x1080)' }
-        }
-
-        devices.forEach(device => {
-            const wrapper = document.createElement('div')
-            wrapper.style.cssText = 'display: flex; flex-direction: column; background: white; border-radius: 8px; overflow: hidden;'
-
-            const label = document.createElement('div')
-            label.textContent = deviceSizes[device]?.label || device
-            label.style.cssText = 'padding: 10px; background: #667eea; color: white; font-weight: bold; text-align: center;'
-
-            const iframe = document.createElement('iframe')
-            iframe.style.cssText = `
-        border: none;
-        width: 100%;
-        height: 100%;
-        transform-origin: top left;
-      `
-            iframe.srcdoc = document.documentElement.outerHTML
-
-            wrapper.appendChild(label)
-            wrapper.appendChild(iframe)
-            iframeContainer.appendChild(wrapper)
-        })
-
-        panel.appendChild(header)
-        panel.appendChild(iframeContainer)
-        document.body.appendChild(panel)
-    }
-
-    static closePreview() {
-        const panel = document.getElementById('rdm-preview-panel')
-        if (panel) {
-            panel.remove()
-        }
-        this.previewMode = false
-        this.previewDevices = []
-    }
-
     static init(rules, options = {}) {
         return new ResponsiveDOMMover(rules, options)
     }
 
     static fromDOM(options = {}) {
-        const elements = document.querySelectorAll('[data-move-to], [data-move-init], [data-move-group], [data-move-breakpoint], [data-move-swap], [data-breakpoint-trigger]')
+        const elements = document.querySelectorAll('[data-move-to], [data-move-init], [data-move-group], [data-move-breakpoint], [data-move-swap]')
         const rulesMap = {}
         const groupsMap = {}
-        const breakpointTriggers = []
 
         elements.forEach(el => {
             let config = {}
-
-            if (el.dataset.breakpointTrigger) {
-                const breakpointName = el.dataset.breakpointTrigger
-                const images = el.dataset.responsiveImages ? JSON.parse(el.dataset.responsiveImages) : null
-                const template = el.dataset.template
-                const callback = el.dataset.onBreakpoint
-
-                breakpointTriggers.push({
-                    element: el,
-                    breakpoint: breakpointName,
-                    images,
-                    template,
-                    callback
-                })
-                return
-            }
 
             if (el.dataset.moveInit) {
                 config = ResponsiveDOMMover._evaluateInit(el.dataset.moveInit)
@@ -326,15 +171,7 @@ class ResponsiveDOMMover {
             })
         }
 
-        const instance = new ResponsiveDOMMover(rules, options)
-
-        breakpointTriggers.forEach(trigger => {
-            ResponsiveDOMMover.onBreakpoint(trigger.breakpoint, (data) => {
-                instance._handleBreakpointTrigger(trigger, data)
-            })
-        })
-
-        return instance
+        return new ResponsiveDOMMover(rules, options)
     }
 
     static _evaluateInit(value) {
@@ -384,6 +221,96 @@ class ResponsiveDOMMover {
         return {
             width: window.innerWidth,
             height: window.innerHeight
+        }
+    }
+
+    static preview(options = {}) {
+        const {
+            devices = ['mobile', 'tablet', 'desktop'],
+            showInPanel = true,
+            position = 'right'
+        } = options
+
+        const previewContainer = document.createElement('div')
+        previewContainer.id = 'rdm-preview-panel'
+        previewContainer.style.cssText = `
+      position: fixed;
+      ${position}: 0;
+      top: 0;
+      width: 400px;
+      height: 100vh;
+      background: #1e1e1e;
+      z-index: 999999;
+      overflow-y: auto;
+      padding: 20px;
+      box-shadow: -2px 0 10px rgba(0,0,0,0.3);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    `
+
+        const title = document.createElement('h2')
+        title.textContent = 'ResponsiveDOMMover Preview'
+        title.style.cssText = 'color: white; margin-bottom: 20px; font-size: 18px;'
+        previewContainer.appendChild(title)
+
+        const closeBtn = document.createElement('button')
+        closeBtn.textContent = '✕'
+        closeBtn.style.cssText = `
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: #f44336;
+      color: white;
+      border: none;
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 16px;
+    `
+        closeBtn.onclick = () => previewContainer.remove()
+        previewContainer.appendChild(closeBtn)
+
+        devices.forEach(device => {
+            const deviceSection = document.createElement('div')
+            deviceSection.style.cssText = 'margin-bottom: 30px;'
+
+            const deviceTitle = document.createElement('h3')
+            deviceTitle.textContent = device.charAt(0).toUpperCase() + device.slice(1)
+            deviceTitle.style.cssText = 'color: #4fc3f7; margin-bottom: 10px; font-size: 14px;'
+            deviceSection.appendChild(deviceTitle)
+
+            const iframe = document.createElement('iframe')
+            iframe.style.cssText = `
+        width: 100%;
+        height: ${device === 'mobile' ? '667px' : device === 'tablet' ? '1024px' : '768px'};
+        border: 2px solid #333;
+        border-radius: 8px;
+        transform: scale(0.3);
+        transform-origin: top left;
+        margin-bottom: 10px;
+      `
+
+            const breakpoint = ResponsiveDOMMover.breakpoints[device]
+            if (breakpoint) {
+                iframe.style.width = breakpoint.match(/\d+/)?.[0] + 'px' || '100%'
+            }
+
+            iframe.src = window.location.href
+            deviceSection.appendChild(iframe)
+
+            const info = document.createElement('div')
+            info.style.cssText = 'color: #999; font-size: 12px;'
+            info.textContent = `Breakpoint: ${ResponsiveDOMMover.breakpoints[device] || 'N/A'}`
+            deviceSection.appendChild(info)
+
+            previewContainer.appendChild(deviceSection)
+        })
+
+        document.body.appendChild(previewContainer)
+
+        return {
+            close: () => previewContainer.remove(),
+            container: previewContainer
         }
     }
 
@@ -455,10 +382,6 @@ class ResponsiveDOMMover {
         if (this.initialized) return
 
         try {
-            if (this.options.statePersistence) {
-                this._loadState()
-            }
-
             this.rules.forEach(rule => {
                 this._validateRule(rule)
                 const mql = matchMedia(rule.media)
@@ -506,10 +429,135 @@ class ResponsiveDOMMover {
         }
     }
 
+    _getBreakpointName(media) {
+        for (const [name, query] of Object.entries(ResponsiveDOMMover.breakpoints)) {
+            if (query === media) return name
+        }
+        return null
+    }
+
+    _triggerBreakpointCallbacks(breakpointName, entered) {
+        const callbacks = this.breakpointCallbacks.get(breakpointName)
+        if (!callbacks) return
+
+        callbacks.forEach(callback => {
+            try {
+                callback({ breakpoint: breakpointName, entered, mover: this })
+            } catch (error) {
+                this._handleError('Breakpoint callback error', error, { breakpointName })
+            }
+        })
+
+        this._dispatch('breakpointChange', {
+            breakpoint: breakpointName,
+            entered,
+            active: Array.from(this.currentBreakpoints)
+        })
+    }
+
+    onBreakpoint(breakpointName, callback) {
+        if (!this.breakpointCallbacks.has(breakpointName)) {
+            this.breakpointCallbacks.set(breakpointName, [])
+        }
+        this.breakpointCallbacks.get(breakpointName).push(callback)
+        return this
+    }
+
+    _applyResponsiveImages(element, config, rule, isEntering) {
+        if (typeof config === 'function') {
+            try {
+                const result = config(element, isEntering, rule)
+
+                if (result) {
+                    if (typeof result === 'string') {
+                        const img = element.querySelector('img') || element
+                        if (img.tagName === 'IMG') {
+                            img.src = result
+                        }
+                    } else if (result.html) {
+                        element.innerHTML = result.html
+                    } else if (result.src) {
+                        const img = element.querySelector('img') || element
+                        if (img.tagName === 'IMG') {
+                            img.src = result.src
+                            if (result.srcset) img.srcset = result.srcset
+                            if (result.alt) img.alt = result.alt
+                        }
+                    }
+                }
+
+                this._dispatch('responsiveImage', {
+                    element,
+                    config: result,
+                    rule,
+                    isEntering
+                })
+
+                this._log('Responsive image applied:', element)
+            } catch (error) {
+                this._handleError('Responsive image error', error, { element, rule })
+            }
+        }
+    }
+
+    _applyTemplate(element, templateName, item) {
+        const template = this.templates.get(templateName)
+        if (!template) {
+            this._log('Template not found:', templateName)
+            return
+        }
+
+        try {
+            let result = template
+
+            if (typeof template === 'function') {
+                result = template(element, item)
+            } else if (typeof template === 'string') {
+                result = template.replace('{content}', element.innerHTML)
+
+                const matches = result.match(/\{([^}]+)\}/g)
+                if (matches) {
+                    matches.forEach(match => {
+                        const selector = match.slice(1, -1)
+                        const targetEl = element.querySelector(selector)
+                        if (targetEl) {
+                            result = result.replace(match, targetEl.textContent || targetEl.innerHTML)
+                        }
+                    })
+                }
+            }
+
+            if (result && typeof result === 'string') {
+                element.outerHTML = result
+            }
+
+            this._dispatch('templateApplied', { element, templateName, result })
+            this._log('Template applied:', templateName)
+        } catch (error) {
+            this._handleError('Template error', error, { element, templateName })
+        }
+    }
+
+    addTemplate(name, template) {
+        this.templates.set(name, template)
+        return this
+    }
+
+    removeTemplate(name) {
+        this.templates.delete(name)
+        return this
+    }
+
     _activateRule(rule) {
         if (this.activeRules.has(rule)) return
 
         this._log('Activating rule:', rule.media)
+
+        const breakpointName = this._getBreakpointName(rule.media)
+        if (breakpointName && !this.currentBreakpoints.has(breakpointName)) {
+            this.currentBreakpoints.add(breakpointName)
+            this._triggerBreakpointCallbacks(breakpointName, true)
+        }
 
         if (rule.isGroup) {
             this._activateGroup(rule)
@@ -518,6 +566,21 @@ class ResponsiveDOMMover {
                 const el = document.querySelector(item.selector)
                 if (!el) {
                     this._log('Element not found:', item.selector)
+                    return
+                }
+
+                if (item.responsiveImages && this.options.responsiveImages) {
+                    this._applyResponsiveImages(el, item.responsiveImages, rule, true)
+                    return
+                }
+
+                if (item.template) {
+                    this._applyTemplate(el, item.template, item)
+                    return
+                }
+
+                if (item.swap) {
+                    this._swapElements(el, item.swap, rule)
                     return
                 }
 
@@ -542,9 +605,7 @@ class ResponsiveDOMMover {
                     return
                 }
 
-                if (item.swap) {
-                    this._swapElements(el, item.swap, rule)
-                } else if (item.intersect && this.options.intersectionObserver) {
+                if (item.intersect && this.options.intersectionObserver) {
                     this._observeIntersection(el, rule, item)
                 } else {
                     const delay = item.delay || 0
@@ -629,12 +690,23 @@ class ResponsiveDOMMover {
 
         this._log('Deactivating rule:', rule.media)
 
+        const breakpointName = this._getBreakpointName(rule.media)
+        if (breakpointName && this.currentBreakpoints.has(breakpointName)) {
+            this.currentBreakpoints.delete(breakpointName)
+            this._triggerBreakpointCallbacks(breakpointName, false)
+        }
+
         if (rule.isGroup) {
             this._deactivateGroup(rule)
         } else {
             rule.items.forEach(item => {
                 const el = document.querySelector(item.selector)
                 if (!el) return
+
+                if (item.responsiveImages && this.options.responsiveImages) {
+                    this._applyResponsiveImages(el, item.responsiveImages, rule, false)
+                    return
+                }
 
                 if (item.swap) {
                     const el2 = document.querySelector(item.swap)
@@ -1150,82 +1222,6 @@ class ResponsiveDOMMover {
         if (this.options.debug) {
             console.log('[ResponsiveDOMMover]', ...args)
         }
-    }
-
-    _handleBreakpointTrigger(trigger, data) {
-        const { element, images, template, callback } = trigger
-
-        this._dispatch('breakpointEnter', {
-            element,
-            breakpoint: data.breakpoint,
-            query: data.query
-        })
-
-        if (images) {
-            this._applyResponsiveImage(element, images, data.breakpoint)
-        }
-
-        if (template) {
-            this._applyTemplate(element, template)
-        }
-
-        if (callback && typeof window[callback] === 'function') {
-            window[callback]({ element, ...data, mover: this })
-        }
-
-        this._log(`Breakpoint trigger: ${data.breakpoint}`, element)
-    }
-
-    _applyResponsiveImage(element, images, breakpoint) {
-        const imageUrl = images[breakpoint]
-        if (!imageUrl) return
-
-        const imgElements = element.querySelectorAll('img')
-
-        if (imgElements.length > 0) {
-            imgElements.forEach(img => {
-                img.src = imageUrl
-                img.dataset.currentBreakpoint = breakpoint
-            })
-        } else if (element.tagName === 'IMG') {
-            element.src = imageUrl
-            element.dataset.currentBreakpoint = breakpoint
-        } else {
-            element.style.backgroundImage = `url(${imageUrl})`
-            element.dataset.currentBreakpoint = breakpoint
-        }
-
-        this._dispatch('imageChanged', {
-            element,
-            breakpoint,
-            imageUrl
-        })
-    }
-
-    _applyTemplate(element, templateName) {
-        const template = ResponsiveDOMMover.templates[templateName]
-        if (!template) {
-            console.error('Template not found:', templateName)
-            return
-        }
-
-        const originalContent = element.innerHTML
-        let processedTemplate = template
-
-        if (typeof template === 'function') {
-            processedTemplate = template(element, originalContent)
-        } else {
-            processedTemplate = template.replace('{content}', originalContent)
-        }
-
-        element.innerHTML = processedTemplate
-        element.dataset.template = templateName
-
-        this._dispatch('templateApplied', {
-            element,
-            templateName,
-            originalContent
-        })
     }
 
     _handleError(message, error, context = {}) {
