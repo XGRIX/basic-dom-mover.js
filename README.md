@@ -1866,7 +1866,1130 @@ document.addEventListener('widget-added', () => {
     dashboardMover.refresh();
 });
 ```
+---
 
+## 🚀 Yeni Özellikler (v3.0.0)
+
+ResponsiveDOMMover v3.0.0 ile birlikte 13 yeni güçlü özellik eklendi! Tüm yeni özellikler **varsayılan olarak kapalıdır** ve geriye dönük uyumluluk tam olarak korunmuştur.
+
+---
+
+## 🎯 1. Grup Taşıma (Batch Move)
+
+Birden fazla elementi tek bir grup olarak taşıyın. Elementler sıraları korunarak birlikte hareket eder.
+
+### HTML ile Kullanım
+
+```html
+<!-- Grup elementleri -->
+<div class="product-card" data-move-group="products" data-move-group-order="1">
+    Ürün 1
+</div>
+<div class="product-card" data-move-group="products" data-move-group-order="2">
+    Ürün 2
+</div>
+<div class="product-card" data-move-group="products" data-move-group-order="3">
+    Ürün 3
+</div>
+<div class="product-card" data-move-group="products" data-move-group-order="4">
+    Ürün 4
+</div>
+
+<!-- Hedef -->
+<div id="mobile-slider"></div>
+
+<script>
+ResponsiveDOMMover.fromDOM({
+    groups: {
+        'products': {
+            media: '(max-width: 768px)',
+            to: '#mobile-slider',
+            keepOrder: true,
+            wrapInContainer: false
+        }
+    }
+});
+</script>
+```
+
+### JavaScript ile Kullanım
+
+```javascript
+// Grup tanımla
+mover.defineGroup('navigation', ['.nav-item-1', '.nav-item-2', '.nav-item-3']);
+
+// Grubu taşı
+mover.moveGroup('navigation', '#mobile-menu');
+
+// Grubu geri getir
+mover.restoreGroup('navigation');
+```
+
+### Gelişmiş Grup Ayarları
+
+```javascript
+ResponsiveDOMMover.fromDOM({
+    groups: {
+        'widgets': {
+            media: '(max-width: 768px)',
+            to: '#mobile-container',
+            keepOrder: true,              // Sırayı koru
+            wrapInContainer: true,        // Grup için wrapper oluştur
+            containerClass: 'widget-group', // Wrapper class'ı
+            animateAsOne: true,           // Tek element gibi animasyon
+            onGroupMove: (data) => {      // Grup callback
+                console.log(`${data.elements.length} element taşındı`);
+            }
+        }
+    }
+});
+```
+
+**Kullanım Senaryoları:**
+- E-ticaret ürün kartları
+- Dashboard widget'ları
+- Form bölümleri
+- Blog sidebar öğeleri
+
+---
+
+## 🔄 2. Swap/Exchange
+
+İki elementi birbirleriyle yer değiştirir.
+
+### HTML ile Kullanım
+
+```html
+<div id="sidebar" data-move-swap="#main-content" data-move-media="(max-width: 768px)">
+    Sidebar
+</div>
+
+<div id="main-content">
+    Ana İçerik
+</div>
+```
+
+### JavaScript ile Kullanım
+
+```javascript
+// Manuel swap
+mover.swap('#element-1', '#element-2');
+
+// Kural ile swap
+ResponsiveDOMMover.init([
+    {
+        media: '(max-width: 768px)',
+        items: [
+            {
+                selector: '#box-a',
+                swap: '#box-b'
+            }
+        ]
+    }
+]);
+```
+
+**Kullanım Senaryoları:**
+- Mobilde sidebar ve content sırası değiştirme
+- Form alanlarını yeniden sıralama
+- Widget pozisyonlarını değiştirme
+
+---
+
+## ✅ 3. Conditional Rules (Koşullu Kurallar)
+
+Belirli koşullar sağlandığında elementi taşıyın.
+
+**Varsayılan:** `false` (kapalı)  
+**Aktifleştirme:** `conditionalRules: true`
+
+### HTML ile Kullanım
+
+```html
+<div data-move-to="#premium-section" 
+     data-move-media="(max-width: 768px)"
+     data-move-condition="window.isPremiumUser">
+    Premium İçerik
+</div>
+
+<script>
+window.isPremiumUser = true; // veya false
+
+ResponsiveDOMMover.fromDOM({
+    conditionalRules: true  // Özelliği aktifleştir
+});
+</script>
+```
+
+### JavaScript ile Kullanım
+
+```javascript
+ResponsiveDOMMover.init([
+    {
+        media: '(max-width: 768px)',
+        to: '#target',
+        items: [
+            {
+                selector: '.widget',
+                condition: () => {
+                    // Koşul fonksiyonu
+                    return localStorage.getItem('showWidget') === 'true';
+                }
+            }
+        ]
+    }
+], {
+    conditionalRules: true  // Aktifleştir
+});
+```
+
+### String Condition
+
+```html
+<div data-move-condition="document.body.classList.contains('dark-mode')">
+    Dark Mode Widget
+</div>
+```
+
+**Kullanım Senaryoları:**
+- Kullanıcı giriş durumuna göre içerik gösterme
+- Tercih bazlı layout değişiklikleri
+- A/B test senaryoları
+- Feature flag'lere göre görünüm
+
+---
+
+## 📋 4. Clone Mode (Kopyalama Modu)
+
+Elementi taşımak yerine kopyalayın. Orijinal yerinde kalır.
+
+**Varsayılan:** `false` (kapalı)  
+**Aktifleştirme:** `cloneMode: true`
+
+### HTML ile Kullanım
+
+```html
+<div class="widget" 
+     data-move-to="#mobile-sidebar"
+     data-move-media="(max-width: 768px)"
+     data-move-clone="true">
+    Bu widget hem masaüstünde hem mobilde görünür
+</div>
+
+<script>
+ResponsiveDOMMover.fromDOM({
+    cloneMode: true  // Global aktifleştir
+});
+</script>
+```
+
+### JavaScript ile Kullanım
+
+```javascript
+ResponsiveDOMMover.init([
+    {
+        media: '(max-width: 768px)',
+        to: '#mobile-menu',
+        items: [
+            {
+                selector: '.nav',
+                clone: true  // Bu item için clone
+            }
+        ]
+    }
+], {
+    cloneMode: true  // Veya global olarak aç
+});
+```
+
+### Clone Event
+
+```javascript
+document.addEventListener('rdm:clone', (e) => {
+    console.log('Original:', e.detail.original);
+    console.log('Clone:', e.detail.clone);
+});
+```
+
+**Kullanım Senaryoları:**
+- Navigasyon hem üstte hem mobil menüde
+- Widget'ı hem sidebar'da hem footer'da gösterme
+- Bilgilendirme mesajlarını çoklu yerlerde gösterme
+
+---
+
+## 📱 5. Breakpoint Helpers
+
+Önceden tanımlı breakpoint isimleri kullanın, media query yazmaya gerek kalmaz.
+
+**Varsayılan:** Hazır breakpoint'ler mevcut
+
+### Kullanım
+
+```html
+<div data-move-breakpoint="mobile" data-move-to="#mobile-container">
+    Mobil İçerik
+</div>
+
+<div data-move-breakpoint="tablet" data-move-to="#tablet-container">
+    Tablet İçerik
+</div>
+
+<div data-move-breakpoint="desktop" data-move-to="#desktop-container">
+    Masaüstü İçerik
+</div>
+
+<script>
+ResponsiveDOMMover.fromDOM();
+</script>
+```
+
+### Hazır Breakpoint'ler
+
+```javascript
+ResponsiveDOMMover.breakpoints = {
+    mobile: '(max-width: 767px)',
+    tablet: '(min-width: 768px) and (max-width: 991px)',
+    desktop: '(min-width: 992px)',
+    wide: '(min-width: 1200px)',
+    portrait: '(orientation: portrait)',
+    landscape: '(orientation: landscape)'
+};
+```
+
+### Özel Breakpoint Ekleme
+
+```javascript
+// Kendi breakpoint'lerinizi ekleyin
+ResponsiveDOMMover.breakpoints.mobile_small = '(max-width: 480px)';
+ResponsiveDOMMover.breakpoints.retina = '(-webkit-min-device-pixel-ratio: 2)';
+
+// Kullanım
+<div data-move-breakpoint="mobile_small" data-move-to="#tiny-screen">
+    Çok Küçük Ekran İçeriği
+</div>
+```
+
+**Avantajları:**
+- Daha okunabilir kod
+- Tek yerden breakpoint yönetimi
+- Tutarlı breakpoint kullanımı
+
+---
+
+## 🎨 6. Element Transformation
+
+Element taşınırken otomatik stil ve class değişiklikleri yapın.
+
+### JavaScript ile Transform Fonksiyonu
+
+```javascript
+ResponsiveDOMMover.init([
+    {
+        media: '(max-width: 768px)',
+        to: '#mobile-area',
+        items: [
+            {
+                selector: '.widget',
+                transform: (element) => {
+                    // Element taşınırken transform et
+                    element.style.fontSize = '14px';
+                    element.style.padding = '10px';
+                    element.classList.add('mobile-view');
+                    element.classList.remove('desktop-view');
+                }
+            }
+        ]
+    }
+]);
+```
+
+### beforeMove Hook ile
+
+```javascript
+ResponsiveDOMMover.init([...], {
+    beforeMove: ({ element, rule, item }) => {
+        // Global transformation
+        if (element.classList.contains('widget')) {
+            element.style.maxWidth = '100%';
+        }
+        return true;
+    }
+});
+```
+
+**Kullanım Senaryoları:**
+- Mobil için font boyutu küçültme
+- Padding/margin ayarlama
+- Responsive görsel boyutlandırma
+- Class değiştirme
+
+---
+
+## 👁️ 7. Intersection Observer Integration
+
+Element görünür olunca (viewport'a girince) taşıma işlemini başlat.
+
+**Varsayılan:** `false` (kapalı)  
+**Aktifleştirme:** `intersectionObserver: true`
+
+### Kullanım
+
+```html
+<div data-move-to="#lazy-container" 
+     data-move-media="(max-width: 768px)"
+     data-move-intersect="true">
+    Bu element görünür olunca taşınır
+</div>
+
+<script>
+ResponsiveDOMMover.fromDOM({
+    intersectionObserver: true  // Aktifleştir
+});
+</script>
+```
+
+### JavaScript ile
+
+```javascript
+ResponsiveDOMMover.init([
+    {
+        media: '(max-width: 768px)',
+        to: '#target',
+        items: [
+            {
+                selector: '.lazy-widget',
+                intersect: true,
+                threshold: 0.5  // %50 görünür olunca
+            }
+        ]
+    }
+], {
+    intersectionObserver: true
+});
+```
+
+**Kullanım Senaryoları:**
+- Lazy loading içerik
+- Performans optimizasyonu
+- Scroll-triggered layout değişiklikleri
+- Below-the-fold içerik yönetimi
+
+---
+
+## 💾 8. State Persistence (Durum Kaydetme)
+
+Elementlerin durumunu localStorage'da sakla, sayfa yenilendiğinde geri yükle.
+
+**Varsayılan:** `false` (kapalı)  
+**Aktifleştirme:** `statePersistence: true`
+
+### Kullanım
+
+```javascript
+const mover = ResponsiveDOMMover.fromDOM({
+    statePersistence: true,
+    storageKey: 'my-app-rdm-state'  // Opsiyonel
+});
+
+// State'i temizle
+mover.clearState();
+```
+
+### Manuel Kontrol
+
+```javascript
+// State otomatik kaydedilir
+// Restore: Sayfa yüklendiğinde otomatik
+
+// Temizleme
+mover.clearState();
+
+// State kontrolü
+const state = localStorage.getItem('rdm-state');
+console.log(JSON.parse(state));
+```
+
+**Kullanım Senaryoları:**
+- Kullanıcı tercihlerini hatırlama
+- Collapse/expand durumlarını kaydetme
+- Tab pozisyonlarını saklama
+- Single Page Application state yönetimi
+
+---
+
+## 🎭 9. CSS Class Triggers
+
+Element taşınırken veya geri dönerken otomatik class ekle/çıkar.
+
+### HTML ile Kullanım
+
+```html
+<div data-move-to="#target" 
+     data-move-media="(max-width: 768px)"
+     data-move-classes='{"onMove":["moved","mobile-active"],"onRestore":["restored"]}'>
+    Widget
+</div>
+```
+
+### JavaScript ile Kullanım
+
+```javascript
+ResponsiveDOMMover.init([
+    {
+        media: '(max-width: 768px)',
+        to: '#mobile-area',
+        items: [
+            {
+                selector: '.widget',
+                classes: {
+                    onMove: ['moved', 'mobile-view', 'compact'],
+                    onRestore: ['restored', 'desktop-view']
+                }
+            }
+        ]
+    }
+]);
+```
+
+### CSS ile Kullanım
+
+```css
+.widget {
+    padding: 20px;
+    background: white;
+}
+
+.widget.moved {
+    padding: 10px;
+    background: #f5f5f5;
+    border: 2px solid #2196f3;
+}
+
+.widget.mobile-view {
+    font-size: 14px;
+}
+```
+
+**Kullanım Senaryoları:**
+- Taşınan elementlere özel stiller
+- Animasyon trigger'ları
+- State gösterimi
+- Debugging (taşınan elementleri highlight etme)
+
+---
+
+## 🎯 10. Multiple Targets (Fallback)
+
+Birden fazla hedef tanımlayın, ilk mevcut olana taşısın.
+
+### HTML ile Kullanım
+
+```html
+<div data-move-fallback="#primary-target, #secondary-target, #fallback-target" 
+     data-move-media="(max-width: 768px)">
+    Esnek Widget
+</div>
+```
+
+### JavaScript ile Kullanım
+
+```javascript
+ResponsiveDOMMover.init([
+    {
+        media: '(max-width: 768px)',
+        to: '#target-1, #target-2, #target-3',  // İlk mevcut olana
+        items: [
+            { selector: '.widget' }
+        ]
+    }
+]);
+```
+
+**Nasıl Çalışır:**
+1. `#target-1` var mı? → Evet → Oraya taşı
+2. Yok → `#target-2` var mı? → Evet → Oraya taşı
+3. Yok → `#target-3` var mı? → Evet → Oraya taşı
+4. Hiçbiri yok → Hata logla
+
+**Kullanım Senaryoları:**
+- Dinamik container'lar
+- Conditional rendering ile birlikte
+- Theme değişikliklerinde esnek hedefler
+- Progressive enhancement
+
+---
+
+## 🎪 11. Event Delegation
+
+Tüm elementler için tek event listener, performanslı olay dinleme.
+
+### Kullanım
+
+```javascript
+const mover = ResponsiveDOMMover.fromDOM();
+
+// Tüm .widget elementleri için tek listener
+mover.on('move', '.widget', (e) => {
+    console.log('Widget taşındı:', e.detail.element);
+    console.log('Kural:', e.detail.rule);
+});
+
+// Tüm .card elementleri için
+mover.on('restore', '.card', (e) => {
+    console.log('Card geri döndü:', e.detail.element);
+});
+
+// Herhangi bir element için
+mover.on('move', '*', (e) => {
+    console.log('Bir element taşındı');
+});
+```
+
+### Çoklu Selector
+
+```javascript
+mover.on('move', '.widget, .card, .item', (e) => {
+    // Üç farklı selector için tek listener
+    console.log('Element taşındı');
+});
+```
+
+**Avantajları:**
+- Tek listener, çok element
+- Daha az memory kullanımı
+- Dinamik elementler otomatik çalışır
+- Performanslı
+
+---
+
+## 🚀 12. Auto-Initialize
+
+Script tag'ine attribute ekleyerek otomatik başlatma.
+
+### Kullanım
+
+```html
+<!-- Otomatik başlat -->
+<script src="responsive-dom-mover-ultimate.js" data-auto-init="true"></script>
+
+<!-- Debug mode ile -->
+<script src="responsive-dom-mover-ultimate.js" 
+        data-auto-init="true" 
+        data-debug="true"></script>
+```
+
+**Eşdeğeri:**
+
+```html
+<script src="responsive-dom-mover-ultimate.js"></script>
+<script>
+    ResponsiveDOMMover.fromDOM({ debug: true });
+</script>
+```
+
+**Avantajları:**
+- Tek satır kurulum
+- Otomatik DOMContentLoaded kontrolü
+- Ek script yazmaya gerek yok
+
+---
+
+## ⏱️ Bonus: Delay (Geciktirme) Özelliği
+
+Element taşımayı belirli süre geciktirin.
+
+### HTML ile Kullanım
+
+```html
+<div data-move-to="#target" 
+     data-move-media="(max-width: 768px)"
+     data-move-delay="1000">
+    1 saniye sonra taşınır
+</div>
+```
+
+### JavaScript ile Kullanım
+
+```javascript
+ResponsiveDOMMover.init([
+    {
+        media: '(max-width: 768px)',
+        to: '#target',
+        items: [
+            {
+                selector: '.widget',
+                delay: 500  // 500ms gecikme
+            }
+        ]
+    }
+]);
+```
+
+**Kullanım Senaryoları:**
+- Animasyon sıralama
+- Yavaş yükleme efekti
+- Cascade efektleri
+- Loading state gösterme
+
+---
+
+## Gelişmiş İstatistikler
+
+v3.0.0 ile istatistikler genişletildi.
+
+```javascript
+const stats = mover.getStats();
+
+console.log(stats);
+// {
+//   rulesCount: 5,
+//   activeRulesCount: 2,
+//   movedElementsCount: 8,
+//   groupsCount: 2,           // YENİ
+//   clonesCount: 3,           // YENİ
+//   historyLength: 15,        // YENİ
+//   initialized: true,
+//   destroyed: false,
+//   viewport: { width: 1920, height: 1080 }
+// }
+```
+
+---
+
+## 📜 History Tracking
+
+Tüm taşıma işlemlerinin geçmişini tutun.
+
+### Kullanım
+
+```javascript
+// History'yi al
+const history = mover.getHistory();
+
+console.log(history);
+// [
+//   {
+//     action: 'move',
+//     element: HTMLElement,
+//     from: HTMLElement,
+//     to: HTMLElement,
+//     timestamp: 1234567890
+//   },
+//   {
+//     action: 'restore',
+//     element: HTMLElement,
+//     from: HTMLElement,
+//     to: HTMLElement,
+//     timestamp: 1234567900
+//   }
+// ]
+
+// History'yi temizle
+mover.clearHistory();
+```
+
+**Kullanım Senaryoları:**
+- Debugging
+- Analytics
+- Undo/Redo fonksiyonalitesi
+- Kullanıcı davranış analizi
+
+---
+
+## Yeni Event'ler
+
+v3.0.0 ile eklenen yeni event'ler:
+
+```javascript
+// Clone event
+document.addEventListener('rdm:clone', (e) => {
+    console.log('Original:', e.detail.original);
+    console.log('Clone:', e.detail.clone);
+});
+
+// Swap event
+document.addEventListener('rdm:swap', (e) => {
+    console.log('Element 1:', e.detail.element1);
+    console.log('Element 2:', e.detail.element2);
+});
+
+// Group move event
+document.addEventListener('rdm:groupMove', (e) => {
+    console.log('Group:', e.detail.groupName);
+    console.log('Elements:', e.detail.elements);
+});
+```
+
+---
+
+## Yeni Metodlar
+
+### `mover.defineGroup(name, selectors)`
+
+```javascript
+mover.defineGroup('navigation', ['.nav-item-1', '.nav-item-2', '.nav-item-3']);
+```
+
+### `mover.moveGroup(groupName, target)`
+
+```javascript
+mover.moveGroup('navigation', '#mobile-menu');
+```
+
+### `mover.restoreGroup(groupName)`
+
+```javascript
+mover.restoreGroup('navigation');
+```
+
+### `mover.swap(selector1, selector2)`
+
+```javascript
+mover.swap('#sidebar', '#content');
+```
+
+### `mover.on(eventName, selector, callback)`
+
+```javascript
+mover.on('move', '.widget', (e) => {
+    console.log('Widget moved');
+});
+```
+
+### `mover.getHistory()`
+
+```javascript
+const history = mover.getHistory();
+```
+
+### `mover.clearHistory()`
+
+```javascript
+mover.clearHistory();
+```
+
+### `mover.clearState()`
+
+```javascript
+mover.clearState();  // localStorage'ı temizle
+```
+
+---
+
+## Geriye Uyumluluk
+
+**ÖNEMLI:** Tüm eski kullanımlar aynen çalışmaya devam ediyor!
+
+### Eski Yöntem (v2.0) - Hala Çalışıyor
+
+```javascript
+const mover = ResponsiveDOMMover.init([
+    {
+        media: '(max-width: 768px)',
+        to: '#mobile-menu',
+        items: [
+            { selector: '.nav', position: 'first' }
+        ]
+    }
+]);
+```
+
+```html
+<div data-move-to="#target" 
+     data-move-media="(max-width: 768px)">
+</div>
+```
+
+### Yeni Özellikler Varsayılan Kapalı
+
+Performans için yeni özellikler kapalı gelir:
+
+```javascript
+ResponsiveDOMMover.fromDOM({
+    // Hangi özellikler istiyorsan aç
+    conditionalRules: false,      // Varsayılan
+    cloneMode: false,             // Varsayılan
+    intersectionObserver: false,  // Varsayılan
+    statePersistence: false       // Varsayılan
+});
+```
+
+---
+
+## Komple Örnek: Tüm Özellikler Birlikte
+
+```html
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ResponsiveDOMMover Ultimate</title>
+</head>
+<body>
+    <!-- Grup -->
+    <div data-move-group="products" data-move-group-order="1">Ürün 1</div>
+    <div data-move-group="products" data-move-group-order="2">Ürün 2</div>
+    <div data-move-group="products" data-move-group-order="3">Ürün 3</div>
+
+    <!-- Swap -->
+    <div id="sidebar" data-move-swap="#content" data-move-breakpoint="mobile">
+        Sidebar
+    </div>
+    <div id="content">İçerik</div>
+
+    <!-- Conditional -->
+    <div data-move-to="#premium-area" 
+         data-move-breakpoint="mobile"
+         data-move-condition="window.isPremium"
+         data-move-classes='{"onMove":["moved","premium"]}'>
+        Premium Widget
+    </div>
+
+    <!-- Clone -->
+    <nav data-move-to="#mobile-menu" 
+         data-move-breakpoint="mobile"
+         data-move-clone="true"
+         data-move-delay="300">
+        Navigasyon
+    </nav>
+
+    <!-- Fallback -->
+    <div data-move-fallback="#target1, #target2, #target3"
+         data-move-breakpoint="tablet"
+         data-move-intersect="true">
+        Esnek Widget
+    </div>
+
+    <!-- Hedefler -->
+    <div id="group-target"></div>
+    <div id="premium-area"></div>
+    <div id="mobile-menu"></div>
+    <div id="target3"></div>
+
+    <!-- Auto-Initialize -->
+    <script src="responsive-dom-mover-ultimate.js" data-auto-init="true" data-debug="true"></script>
+    
+    <script>
+        window.isPremium = true;
+
+        // Event delegation
+        const mover = window.ResponsiveDOMMover.fromDOM({
+            conditionalRules: true,
+            cloneMode: true,
+            intersectionObserver: true,
+            statePersistence: true,
+            groups: {
+                'products': {
+                    media: ResponsiveDOMMover.breakpoints.mobile,
+                    to: '#group-target',
+                    keepOrder: true
+                }
+            }
+        });
+
+        mover.on('move', '.widget', (e) => {
+            console.log('Widget taşındı:', e.detail.element);
+        });
+
+        // Manuel kontroller
+        document.getElementById('swapBtn').addEventListener('click', () => {
+            mover.swap('#sidebar', '#content');
+        });
+
+        document.getElementById('moveGroupBtn').addEventListener('click', () => {
+            mover.moveGroup('products', '#group-target');
+        });
+
+        // İstatistikler
+        setInterval(() => {
+            const stats = mover.getStats();
+            console.log('Stats:', stats);
+        }, 5000);
+    </script>
+</body>
+</html>
+```
+
+---
+
+## v2.0 vs v3.0 Karşılaştırması
+
+| Özellik | v2.0 | v3.0 |
+|---------|------|------|
+| Temel Taşıma | ✅ | ✅ |
+| Animasyonlar | ✅ | ✅ |
+| Öncelik Sistemi | ✅ | ✅ |
+| DOM Observer | ✅ | ✅ |
+| **Grup Taşıma** | ❌ | ✅ |
+| **Swap/Exchange** | ❌ | ✅ |
+| **Conditional Rules** | ❌ | ✅ |
+| **Clone Mode** | ❌ | ✅ |
+| **Breakpoint Helpers** | ❌ | ✅ |
+| **Element Transformation** | ❌ | ✅ |
+| **Intersection Observer** | ❌ | ✅ |
+| **State Persistence** | ❌ | ✅ |
+| **CSS Class Triggers** | ❌ | ✅ |
+| **Multiple Targets** | ❌ | ✅ |
+| **Event Delegation** | ❌ | ✅ |
+| **Auto-Initialize** | ❌ | ✅ |
+| **Delay Support** | ❌ | ✅ |
+| **History Tracking** | ❌ | ✅ |
+
+---
+
+## 🎓 Best Practices (v3.0)
+
+### 1. Sadece İhtiyacınız Olan Özellikleri Açın
+
+```javascript
+// ❌ Kötü - Hepsini aç
+ResponsiveDOMMover.fromDOM({
+    conditionalRules: true,
+    cloneMode: true,
+    intersectionObserver: true,
+    statePersistence: true
+});
+
+// ✅ İyi - Sadece kullandıklarını aç
+ResponsiveDOMMover.fromDOM({
+    conditionalRules: true  // Sadece bunu kullanıyorum
+});
+```
+
+### 2. Grup Taşıma Performanslıdır
+
+```javascript
+// ❌ Kötü - Tek tek taşı
+items: [
+    { selector: '.item-1' },
+    { selector: '.item-2' },
+    { selector: '.item-3' },
+    { selector: '.item-4' }
+]
+
+// ✅ İyi - Grup olarak taşı
+<div data-move-group="items">Item 1</div>
+<div data-move-group="items">Item 2</div>
+<div data-move-group="items">Item 3</div>
+<div data-move-group="items">Item 4</div>
+```
+
+### 3. Event Delegation Kullanın
+
+```javascript
+// ❌ Kötü - Her element için ayrı listener
+document.querySelectorAll('.widget').forEach(el => {
+    el.addEventListener('rdm:move', handler);
+});
+
+// ✅ İyi - Tek listener
+mover.on('move', '.widget', handler);
+```
+
+### 4. Clone Yerine Normal Taşıma Tercih Edin
+
+```javascript
+// Clone sadece gerçekten gerekli olduğunda
+// Normal taşıma daha performanslı
+```
+
+### 5. State Persistence Dikkatli Kullanın
+
+```javascript
+// Her element için değil, sadece önemli state'ler için
+// localStorage sınırlıdır
+```
+
+---
+
+## 🐛 Troubleshooting (v3.0)
+
+### Grup Taşımıyor
+
+```javascript
+// Kontrol 1: Grup özelliği aktif mi?
+ResponsiveDOMMover.fromDOM({
+    groups: {
+        'mygroup': { ... }  // Grup tanımlandı mı?
+    }
+});
+
+// Kontrol 2: data-move-group doğru mu?
+<div data-move-group="mygroup">  // İsim eşleşiyor mu?
+```
+
+### Conditional Rule Çalışmıyor
+
+```javascript
+// conditionalRules: true olmalı
+ResponsiveDOMMover.fromDOM({
+    conditionalRules: true  // Bunu eklediniz mi?
+});
+
+// Koşul fonksiyonu doğru mu?
+window.myCondition = true;  // Tanımlı mı?
+```
+
+### Clone Çalışmıyor
+
+```javascript
+// cloneMode: true olmalı
+ResponsiveDOMMover.fromDOM({
+    cloneMode: true  // Aktif mi?
+});
+```
+
+### State Kaydetmiyor
+
+```javascript
+// statePersistence: true olmalı
+// localStorage erişimi var mı?
+ResponsiveDOMMover.fromDOM({
+    statePersistence: true
+});
+```
+
+---
+
+## Performans İpuçları (v3.0)
+
+1. **Intersection Observer kullanın** - Görünmeyen elementleri taşımayın
+2. **Grup taşıma kullanın** - Daha az DOM operasyonu
+3. **Event delegation kullanın** - Daha az memory
+4. **Clone'u sınırlı kullanın** - Extra DOM node'ları
+5. **State persistence'ı gerektiğinde** - Her zaman değil
+6. **Conditional rules akıllıca** - Gereksiz kontroller yapmayın
+
+---
+
+##  Sonuç
+
+ResponsiveDOMMover v3.0.0 ile artık:
+
+✅ Grupları taşıyabilirsiniz  
+✅ Elementleri swap edebilirsiniz  
+✅ Koşullu kurallar yazabilirsiniz  
+✅ Clone mode kullanabilirsiniz  
+✅ Hazır breakpoint'ler kullanabilirsiniz  
+✅ Element transformation yapabilirsiniz  
+✅ Intersection observer entegre edebilirsiniz  
+✅ State persistence kullanabilirsiniz  
+✅ CSS class trigger'ları kullanabilirsiniz  
+✅ Multiple target fallback'leri kullanabilirsiniz  
+✅ Event delegation yapabilirsiniz  
+✅ Auto-initialize kullanabilirsiniz  
+✅ Delay ekleyebilirsiniz  
+✅ History tracking yapabilirsiniz  
+
+Ve en önemlisi: **TÜM ESKİ KODLARINIZ AYNEN ÇALIŞIYOR!** 🚀
+
+---
+
+**Son Güncelleme:** 19 Ocak 2024  
+**Versiyon:** 3.0.0  
+**Yazar:** Your Name
 ---
 
 ### Katkıda Bulunma
