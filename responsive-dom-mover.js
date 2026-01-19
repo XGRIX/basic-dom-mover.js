@@ -6,37 +6,182 @@
  */
 
 class ResponsiveDOMMover {
-    static version = '2.0.0'
+    static version = '3.0.0'
+
+    static breakpoints = {
+        mobile: '(max-width: 767px)',
+        tablet: '(min-width: 768px) and (max-width: 991px)',
+        desktop: '(min-width: 992px)',
+        wide: '(min-width: 1200px)',
+        portrait: '(orientation: portrait)',
+        landscape: '(orientation: landscape)'
+    }
 
     static init(rules, options = {}) {
         return new ResponsiveDOMMover(rules, options)
     }
 
     static fromDOM(options = {}) {
-        const elements = document.querySelectorAll('[data-move-to]')
+        const elements = document.querySelectorAll('[data-move-to], [data-move-init], [data-move-group], [data-move-breakpoint]')
         const rulesMap = {}
+        const groupsMap = {}
 
         elements.forEach(el => {
-            const media = el.dataset.moveMedia || '(min-width: 768px)'
-            const key = `${media}-${el.dataset.moveTo}`
+            let config = {}
+
+            if (el.dataset.moveInit) {
+                config = ResponsiveDOMMover._evaluateInit(el.dataset.moveInit)
+                if (!config) return
+            } else if (el.dataset.moveBreakpoint) {
+                const breakpoint = ResponsiveDOMMover.breakpoints[el.dataset.moveBreakpoint]
+                if (!breakpoint) {
+                    console.error('Unknown breakpoint:', el.dataset.moveBreakpoint)
+                    return
+                }
+                config = {
+                    to: el.dataset.moveTo,
+                    media: breakpoint,
+                    position: el.dataset.movePosition,
+                    priority: el.dataset.movePriority,
+                    once: el.dataset.moveOnce
+                }
+            } else {
+                config = {
+                    to: el.dataset.moveTo,
+                    media: el.dataset.moveMedia || '(min-width: 768px)',
+                    position: el.dataset.movePosition,
+                    priority: el.dataset.movePriority,
+                    once: el.dataset.moveOnce,
+                    clone: el.dataset.moveClone,
+                    swap: el.dataset.moveSwap,
+                    condition: el.dataset.moveCondition,
+                    intersect: el.dataset.moveIntersect,
+                    classes: el.dataset.moveClasses,
+                    delay: el.dataset.moveDelay,
+                    fallback: el.dataset.moveFallback
+                }
+            }
+
+            if (el.dataset.moveGroup) {
+                const groupName = el.dataset.moveGroup
+                if (!groupsMap[groupName]) {
+                    groupsMap[groupName] = {
+                        name: groupName,
+                        elements: [],
+                        config: config
+                    }
+                }
+                groupsMap[groupName].elements.push(el)
+                ResponsiveDOMMover.uid(el)
+                return
+            }
+
+            const media = config.media || el.dataset.moveMedia || '(min-width: 768px)'
+            const to = config.to || el.dataset.moveTo
+
+            if (!to) {
+                console.error('Missing "to" target for element:', el)
+                return
+            }
+
+            const key = `${media}-${to}`
 
             if (!rulesMap[key]) {
                 rulesMap[key] = {
                     media,
-                    to: el.dataset.moveTo,
+                    to,
                     items: []
                 }
             }
 
             rulesMap[key].items.push({
                 selector: `[data-move-id="${ResponsiveDOMMover.uid(el)}"]`,
-                position: el.dataset.movePosition || 'last',
-                priority: Number(el.dataset.movePriority || 0),
-                once: el.dataset.moveOnce === 'true'
+                position: config.position || el.dataset.movePosition || 'last',
+                priority: Number(config.priority || el.dataset.movePriority || 0),
+                once: (config.once || el.dataset.moveOnce) === 'true' || config.once === true,
+                clone: (config.clone || el.dataset.moveClone) === 'true' || config.clone === true,
+                swap: config.swap || el.dataset.moveSwap,
+                condition: config.condition || el.dataset.moveCondition,
+                intersect: config.intersect || el.dataset.moveIntersect,
+                classes: ResponsiveDOMMover._parseClasses(config.classes || el.dataset.moveClasses),
+                delay: Number(config.delay || el.dataset.moveDelay || 0),
+                fallback: (config.fallback || el.dataset.moveFallback || to).split(',').map(s => s.trim())
             })
         })
 
-        return new ResponsiveDOMMover(Object.values(rulesMap), options)
+        const rules = Object.values(rulesMap)
+
+        Object.values(groupsMap).forEach(group => {
+            const media = group.config.media || '(min-width: 768px)'
+            const to = group.config.to
+
+            if (!to) return
+
+            const groupRule = {
+                media,
+                to,
+                isGroup: true,
+                groupName: group.name,
+                items: group.elements.map(el => ({
+                    selector: `[data-move-id="${el.dataset.moveId}"]`,
+                    position: group.config.position || 'last',
+                    priority: Number(group.config.priority || 0),
+                    groupOrder: Number(el.dataset.moveGroupOrder || 0)
+                }))
+            }
+
+            rules.push(groupRule)
+        })
+
+        if (options.groups) {
+            Object.entries(options.groups).forEach(([name, config]) => {
+                rules.push({
+                    media: config.media,
+                    to: config.to,
+                    isGroup: true,
+                    groupName: name,
+                    keepOrder: config.keepOrder !== false,
+                    wrapInContainer: config.wrapInContainer,
+                    containerClass: config.containerClass,
+                    animateAsOne: config.animateAsOne,
+                    items: document.querySelectorAll(`[data-move-group="${name}"]`)
+                })
+            })
+        }
+
+        return new ResponsiveDOMMover(rules, options)
+    }
+
+    static _evaluateInit(value) {
+        const initValue = value.trim()
+
+        if (initValue.includes('(') && initValue.includes(')')) {
+            try {
+                const func = new Function('return ' + initValue)()
+                return typeof func === 'function' ? func() : func
+            } catch (e) {
+                console.error('Error evaluating data-move-init:', e)
+                return null
+            }
+        } else {
+            if (typeof window[initValue] === 'function') {
+                return window[initValue]()
+            } else if (typeof window[initValue] === 'object') {
+                return window[initValue]
+            } else {
+                console.error('data-move-init value not found:', initValue)
+                return null
+            }
+        }
+    }
+
+    static _parseClasses(value) {
+        if (!value) return null
+        try {
+            return JSON.parse(value)
+        } catch (e) {
+            return { onMove: value.split(',').map(s => s.trim()) }
+        }
     }
 
     static uid(el) {
@@ -65,6 +210,7 @@ class ResponsiveDOMMover {
         this.rules = rules.map(r => ({
             priority: 0,
             once: false,
+            clone: false,
             ...r
         }))
 
@@ -80,13 +226,23 @@ class ResponsiveDOMMover {
             afterMove: null,
             beforeRestore: null,
             afterRestore: null,
+            conditionalRules: false,
+            cloneMode: false,
+            intersectionObserver: false,
+            statePersistence: false,
+            storageKey: 'rdm-state',
             ...options
         }
 
         this.items = new Map()
+        this.clones = new Map()
+        this.groups = new Map()
         this.activeRules = new Set()
         this.mqls = []
         this.observer = null
+        this.intersectionObserver = null
+        this.eventDelegates = new Map()
+        this.history = []
         this.initialized = false
         this.destroyed = false
 
@@ -102,6 +258,10 @@ class ResponsiveDOMMover {
         if (this.initialized) return
 
         try {
+            if (this.options.statePersistence) {
+                this._loadState()
+            }
+
             this.rules.forEach(rule => {
                 this._validateRule(rule)
                 const mql = matchMedia(rule.media)
@@ -117,6 +277,10 @@ class ResponsiveDOMMover {
                 this._observe()
             }
 
+            if (this.options.intersectionObserver) {
+                this._setupIntersectionObserver()
+            }
+
             this.initialized = true
             this._log('Initialized with', this.rules.length, 'rules')
             this._dispatch('init', { rules: this.rules })
@@ -129,10 +293,10 @@ class ResponsiveDOMMover {
         if (!rule.media) {
             throw new Error('Rule must have a media query')
         }
-        if (!rule.to) {
-            throw new Error('Rule must have a target selector')
+        if (!rule.to && !rule.swap) {
+            throw new Error('Rule must have a target selector or swap target')
         }
-        if (!Array.isArray(rule.items)) {
+        if (!rule.isGroup && !Array.isArray(rule.items)) {
             throw new Error('Rule must have items array')
         }
     }
@@ -150,32 +314,101 @@ class ResponsiveDOMMover {
 
         this._log('Activating rule:', rule.media)
 
-        rule.items.forEach(item => {
-            const el = document.querySelector(item.selector)
-            if (!el) {
-                this._log('Element not found:', item.selector)
-                return
-            }
+        if (rule.isGroup) {
+            this._activateGroup(rule)
+        } else {
+            rule.items.forEach(item => {
+                const el = document.querySelector(item.selector)
+                if (!el) {
+                    this._log('Element not found:', item.selector)
+                    return
+                }
 
-            const current = this.items.get(el)
-            const itemPriority = item.priority ?? rule.priority
+                if (this.options.conditionalRules && item.condition) {
+                    const conditionMet = this._evaluateCondition(item.condition)
+                    if (!conditionMet) {
+                        this._log('Condition not met, skipping:', el)
+                        return
+                    }
+                }
 
-            if (current && current.priority > itemPriority) {
-                this._log('Skipping move due to priority:', el)
-                return
-            }
+                const current = this.items.get(el)
+                const itemPriority = item.priority ?? rule.priority
 
-            if (current && current.once) {
-                this._log('Skipping move due to once flag:', el)
-                return
-            }
+                if (current && current.priority > itemPriority) {
+                    this._log('Skipping move due to priority:', el)
+                    return
+                }
 
-            this._moveElement(el, rule, item)
-        })
+                if (current && current.once) {
+                    this._log('Skipping move due to once flag:', el)
+                    return
+                }
+
+                if (item.swap) {
+                    this._swapElements(el, item.swap)
+                } else if (item.intersect && this.options.intersectionObserver) {
+                    this._observeIntersection(el, rule, item)
+                } else {
+                    const delay = item.delay || 0
+                    if (delay > 0) {
+                        setTimeout(() => this._moveElement(el, rule, item), delay)
+                    } else {
+                        this._moveElement(el, rule, item)
+                    }
+                }
+            })
+        }
 
         this.activeRules.add(rule)
         rule.onEnter?.({ rule, mover: this })
         this._dispatch('enter', { rule })
+    }
+
+    _activateGroup(rule) {
+        const elements = Array.from(rule.items).map(item => {
+            return typeof item === 'object' ? document.querySelector(item.selector) : item
+        }).filter(Boolean)
+
+        if (elements.length === 0) return
+
+        if (rule.keepOrder !== false) {
+            elements.sort((a, b) => {
+                const orderA = Number(a.dataset.moveGroupOrder || 0)
+                const orderB = Number(b.dataset.moveGroupOrder || 0)
+                return orderA - orderB
+            })
+        }
+
+        const groupId = rule.groupName || `group-${Date.now()}`
+        this.groups.set(groupId, {
+            elements,
+            rule,
+            container: null
+        })
+
+        if (rule.wrapInContainer) {
+            const container = document.createElement('div')
+            container.className = rule.containerClass || 'rdm-group-container'
+            container.dataset.groupId = groupId
+
+            const target = this._findTarget(rule.to)
+            if (target) {
+                target.appendChild(container)
+
+                elements.forEach(el => {
+                    this._moveElement(el, rule, { position: 'last' }, container)
+                })
+
+                this.groups.get(groupId).container = container
+            }
+        } else {
+            elements.forEach(el => {
+                this._moveElement(el, rule, { position: 'last' })
+            })
+        }
+
+        rule.onGroupMove?.({ elements, groupId })
     }
 
     _deactivateRule(rule) {
@@ -183,27 +416,144 @@ class ResponsiveDOMMover {
 
         this._log('Deactivating rule:', rule.media)
 
-        rule.items.forEach(item => {
-            const el = document.querySelector(item.selector)
-            if (!el) return
+        if (rule.isGroup) {
+            this._deactivateGroup(rule)
+        } else {
+            rule.items.forEach(item => {
+                const el = document.querySelector(item.selector)
+                if (!el) return
 
-            const data = this.items.get(el)
-            if (data && data.rule === rule) {
-                this._restoreElement(el)
-            }
-        })
+                const data = this.items.get(el)
+                if (data && data.rule === rule) {
+                    this._restoreElement(el)
+                }
+            })
+        }
 
         this.activeRules.delete(rule)
         rule.onLeave?.({ rule, mover: this })
         this._dispatch('leave', { rule })
     }
 
-    async _moveElement(el, rule, item) {
+    _deactivateGroup(rule) {
+        const groupId = rule.groupName
+        const group = this.groups.get(groupId)
+
+        if (!group) return
+
+        if (group.container) {
+            group.container.remove()
+        }
+
+        group.elements.forEach(el => {
+            this._restoreElement(el)
+        })
+
+        this.groups.delete(groupId)
+    }
+
+    _evaluateCondition(condition) {
+        if (typeof condition === 'function') {
+            return condition()
+        }
+
+        if (typeof condition === 'string') {
+            try {
+                return new Function('return ' + condition)()
+            } catch (e) {
+                console.error('Error evaluating condition:', e)
+                return false
+            }
+        }
+
+        return Boolean(condition)
+    }
+
+    _swapElements(el1Selector, el2Selector) {
+        const el1 = typeof el1Selector === 'string' ? document.querySelector(el1Selector) : el1Selector
+        const el2 = document.querySelector(el2Selector)
+
+        if (!el1 || !el2) {
+            this._log('Swap: One or both elements not found')
+            return
+        }
+
+        const parent1 = el1.parentNode
+        const next1 = el1.nextSibling
+        const parent2 = el2.parentNode
+        const next2 = el2.nextSibling
+
+        if (next1) {
+            parent1.insertBefore(el2, next1)
+        } else {
+            parent1.appendChild(el2)
+        }
+
+        if (next2) {
+            parent2.insertBefore(el1, next2)
+        } else {
+            parent2.appendChild(el1)
+        }
+
+        this._dispatch('swap', { element1: el1, element2: el2 })
+        this._log('Swapped elements:', el1, el2)
+    }
+
+    _setupIntersectionObserver() {
+        this.intersectionObserver = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    const el = entry.target
+                    const data = el._rdmIntersectData
+                    if (data) {
+                        this._moveElement(el, data.rule, data.item)
+                        this.intersectionObserver.unobserve(el)
+                    }
+                }
+            })
+        }, { threshold: 0.5 })
+    }
+
+    _observeIntersection(el, rule, item) {
+        el._rdmIntersectData = { rule, item }
+        this.intersectionObserver.observe(el)
+    }
+
+    _findTarget(targetString) {
+        const targets = targetString.split(',').map(s => s.trim())
+
+        for (const target of targets) {
+            const element = document.querySelector(target)
+            if (element) return element
+        }
+
+        return null
+    }
+
+    async _moveElement(el, rule, item, customTarget = null) {
         try {
-            // Call global beforeMove hook
             if (this.options.beforeMove) {
                 const shouldContinue = await this.options.beforeMove({ element: el, rule, item })
                 if (shouldContinue === false) return
+            }
+
+            const isClone = (this.options.cloneMode || item.clone) && !this.clones.has(el)
+
+            if (isClone) {
+                const clone = el.cloneNode(true)
+                clone.removeAttribute('data-move-id')
+                ResponsiveDOMMover.uid(clone)
+
+                const target = customTarget || this._findTarget(rule.to)
+                if (!target) {
+                    throw new Error(`Target not found: ${rule.to}`)
+                }
+
+                this._insertElement(clone, target, item.position)
+
+                this.clones.set(el, clone)
+                this._dispatch('clone', { original: el, clone, rule, item })
+                return
             }
 
             if (this.items.has(el)) {
@@ -218,9 +568,19 @@ class ResponsiveDOMMover {
 
             parent.insertBefore(placeholder, el)
 
-            const target = document.querySelector(rule.to)
+            const target = customTarget || this._findTarget(rule.to)
             if (!target) {
                 throw new Error(`Target not found: ${rule.to}`)
+            }
+
+            if (item.classes?.onMove) {
+                el.classList.add(...item.classes.onMove)
+            }
+
+            if (item.transform) {
+                if (typeof item.transform === 'function') {
+                    item.transform(el)
+                }
             }
 
             if (this.options.animations) {
@@ -239,6 +599,18 @@ class ResponsiveDOMMover {
                 item,
                 movedAt: Date.now()
             })
+
+            this.history.push({
+                action: 'move',
+                element: el,
+                from: parent,
+                to: target,
+                timestamp: Date.now()
+            })
+
+            if (this.options.statePersistence) {
+                this._saveState()
+            }
 
             item.onMove?.({ element: el, rule, item })
             rule.onMove?.({ element: el, rule, item })
@@ -264,6 +636,14 @@ class ResponsiveDOMMover {
                 if (shouldContinue === false) return
             }
 
+            if (data.item.classes?.onRestore) {
+                el.classList.add(...data.item.classes.onRestore)
+            }
+
+            if (data.item.classes?.onMove) {
+                el.classList.remove(...data.item.classes.onMove)
+            }
+
             if (this.options.animations && !skipAnimation) {
                 await this._animateRestore(el, data.parent)
             } else {
@@ -276,6 +656,18 @@ class ResponsiveDOMMover {
 
             data.placeholder.remove()
             this.items.delete(el)
+
+            this.history.push({
+                action: 'restore',
+                element: el,
+                from: el.parentNode,
+                to: data.parent,
+                timestamp: Date.now()
+            })
+
+            if (this.options.statePersistence) {
+                this._saveState()
+            }
 
             if (this.options.afterRestore) {
                 await this.options.afterRestore({ element: el, data })
@@ -302,7 +694,6 @@ class ResponsiveDOMMover {
                 target.appendChild(el)
             }
         } else if (typeof position === 'string') {
-            // Selector-based positioning
             const referenceNode = target.querySelector(position)
             if (referenceNode) {
                 target.insertBefore(el, referenceNode)
@@ -318,14 +709,12 @@ class ResponsiveDOMMover {
         return new Promise(resolve => {
             const startRect = el.getBoundingClientRect()
 
-            // Insert element
             this._insertElement(el, target, position)
 
             const endRect = el.getBoundingClientRect()
             const deltaX = startRect.left - endRect.left
             const deltaY = startRect.top - endRect.top
 
-            // Apply animation
             el.style.transform = `translate(${deltaX}px, ${deltaY}px)`
             el.style.transition = 'none'
 
@@ -418,6 +807,34 @@ class ResponsiveDOMMover {
         }
     }
 
+    _saveState() {
+        try {
+            const state = {
+                items: Array.from(this.items.entries()).map(([el, data]) => ({
+                    id: el.dataset.moveId,
+                    ruleMedia: data.rule.media,
+                    timestamp: data.movedAt
+                })),
+                timestamp: Date.now()
+            }
+            localStorage.setItem(this.options.storageKey, JSON.stringify(state))
+        } catch (e) {
+            this._log('Failed to save state:', e)
+        }
+    }
+
+    _loadState() {
+        try {
+            const saved = localStorage.getItem(this.options.storageKey)
+            if (!saved) return
+
+            const state = JSON.parse(saved)
+            this._log('Loaded state:', state)
+        } catch (e) {
+            this._log('Failed to load state:', e)
+        }
+    }
+
     _dispatch(type, detail = {}) {
         try {
             const event = new CustomEvent(`rdm:${type}`, {
@@ -452,6 +869,82 @@ class ResponsiveDOMMover {
         }
 
         this._dispatch('error', errorObj)
+    }
+
+    on(eventName, selector, callback) {
+        if (!this.eventDelegates.has(eventName)) {
+            this.eventDelegates.set(eventName, [])
+
+            document.addEventListener(`rdm:${eventName}`, (e) => {
+                const delegates = this.eventDelegates.get(eventName) || []
+                delegates.forEach(({ selector, callback }) => {
+                    if (e.detail.element && e.detail.element.matches(selector)) {
+                        callback(e)
+                    }
+                })
+            })
+        }
+
+        this.eventDelegates.get(eventName).push({ selector, callback })
+        return this
+    }
+
+    defineGroup(name, selectors) {
+        const elements = selectors.map(sel => document.querySelector(sel)).filter(Boolean)
+
+        this.groups.set(name, {
+            elements,
+            selectors,
+            defined: true
+        })
+
+        return this
+    }
+
+    moveGroup(groupName, target) {
+        const group = this.groups.get(groupName)
+        if (!group) {
+            this._log('Group not found:', groupName)
+            return this
+        }
+
+        const targetEl = document.querySelector(target)
+        if (!targetEl) {
+            this._log('Target not found:', target)
+            return this
+        }
+
+        group.elements.forEach(el => {
+            targetEl.appendChild(el)
+        })
+
+        this._dispatch('groupMove', { groupName, target, elements: group.elements })
+        return this
+    }
+
+    restoreGroup(groupName) {
+        const group = this.groups.get(groupName)
+        if (!group) return this
+
+        group.elements.forEach(el => {
+            this._restoreElement(el)
+        })
+
+        return this
+    }
+
+    swap(selector1, selector2) {
+        this._swapElements(selector1, selector2)
+        return this
+    }
+
+    getHistory() {
+        return [...this.history]
+    }
+
+    clearHistory() {
+        this.history = []
+        return this
     }
 
     addRule(rule) {
@@ -522,6 +1015,9 @@ class ResponsiveDOMMover {
             rulesCount: this.rules.length,
             activeRulesCount: this.activeRules.size,
             movedElementsCount: this.items.size,
+            groupsCount: this.groups.size,
+            clonesCount: this.clones.size,
+            historyLength: this.history.length,
             initialized: this.initialized,
             destroyed: this.destroyed,
             viewport: ResponsiveDOMMover.viewport
@@ -561,6 +1057,13 @@ class ResponsiveDOMMover {
         return this
     }
 
+    clearState() {
+        if (this.options.statePersistence) {
+            localStorage.removeItem(this.options.storageKey)
+        }
+        return this
+    }
+
     destroy() {
         if (this.destroyed) return
 
@@ -578,9 +1081,16 @@ class ResponsiveDOMMover {
             this.observer.disconnect()
         }
 
+        if (this.intersectionObserver) {
+            this.intersectionObserver.disconnect()
+        }
+
         this.mqls = []
         this.items.clear()
+        this.clones.clear()
+        this.groups.clear()
         this.activeRules.clear()
+        this.eventDelegates.clear()
         this.destroyed = true
         this.initialized = false
 
@@ -598,4 +1108,14 @@ if (typeof define === 'function' && define.amd) {
 
 if (typeof window !== 'undefined') {
     window.ResponsiveDOMMover = ResponsiveDOMMover
+
+    if (document.currentScript && document.currentScript.dataset.autoInit === 'true') {
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => {
+                ResponsiveDOMMover.fromDOM({ debug: document.currentScript.dataset.debug === 'true' })
+            })
+        } else {
+            ResponsiveDOMMover.fromDOM({ debug: document.currentScript.dataset.debug === 'true' })
+        }
+    }
 }
