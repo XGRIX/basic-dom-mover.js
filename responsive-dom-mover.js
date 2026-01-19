@@ -1,6 +1,6 @@
 /**
  * ResponsiveDOMMover - Advanced responsive DOM manipulation library
- * @version 2.0.0
+ * @version 3.0.0
  * @author GRIX
  * @license MIT
  */
@@ -22,7 +22,7 @@ class ResponsiveDOMMover {
     }
 
     static fromDOM(options = {}) {
-        const elements = document.querySelectorAll('[data-move-to], [data-move-init], [data-move-group], [data-move-breakpoint]')
+        const elements = document.querySelectorAll('[data-move-to], [data-move-init], [data-move-group], [data-move-breakpoint], [data-move-swap]')
         const rulesMap = {}
         const groupsMap = {}
 
@@ -68,7 +68,8 @@ class ResponsiveDOMMover {
                     groupsMap[groupName] = {
                         name: groupName,
                         elements: [],
-                        config: config
+                        media: el.dataset.moveMedia || '(max-width: 768px)',
+                        to: el.dataset.moveTo
                     }
                 }
                 groupsMap[groupName].elements.push(el)
@@ -79,8 +80,24 @@ class ResponsiveDOMMover {
             const media = config.media || el.dataset.moveMedia || '(min-width: 768px)'
             const to = config.to || el.dataset.moveTo
 
-            if (!to) {
-                console.error('Missing "to" target for element:', el)
+            if (!to && !config.swap) {
+                console.error('Missing "to" target or swap for element:', el)
+                return
+            }
+
+            if (config.swap || el.dataset.moveSwap) {
+                const swapTarget = config.swap || el.dataset.moveSwap
+                const key = `swap-${media}-${ResponsiveDOMMover.uid(el)}`
+
+                rulesMap[key] = {
+                    media,
+                    to: swapTarget,
+                    items: [{
+                        selector: `[data-move-id="${el.dataset.moveId}"]`,
+                        swap: swapTarget,
+                        priority: Number(config.priority || el.dataset.movePriority || 0)
+                    }]
+                }
                 return
             }
 
@@ -100,7 +117,6 @@ class ResponsiveDOMMover {
                 priority: Number(config.priority || el.dataset.movePriority || 0),
                 once: (config.once || el.dataset.moveOnce) === 'true' || config.once === true,
                 clone: (config.clone || el.dataset.moveClone) === 'true' || config.clone === true,
-                swap: config.swap || el.dataset.moveSwap,
                 condition: config.condition || el.dataset.moveCondition,
                 intersect: config.intersect || el.dataset.moveIntersect,
                 classes: ResponsiveDOMMover._parseClasses(config.classes || el.dataset.moveClasses),
@@ -112,20 +128,25 @@ class ResponsiveDOMMover {
         const rules = Object.values(rulesMap)
 
         Object.values(groupsMap).forEach(group => {
-            const media = group.config.media || '(min-width: 768px)'
-            const to = group.config.to
+            const media = group.media
+            const to = group.to
 
-            if (!to) return
+            if (!to) {
+                console.error('Group missing target:', group.name)
+                return
+            }
 
             const groupRule = {
                 media,
                 to,
                 isGroup: true,
                 groupName: group.name,
+                keepOrder: true,
                 items: group.elements.map(el => ({
                     selector: `[data-move-id="${el.dataset.moveId}"]`,
-                    position: group.config.position || 'last',
-                    priority: Number(group.config.priority || 0),
+                    element: el,
+                    position: 'last',
+                    priority: 0,
                     groupOrder: Number(el.dataset.moveGroupOrder || 0)
                 }))
             }
@@ -135,6 +156,10 @@ class ResponsiveDOMMover {
 
         if (options.groups) {
             Object.entries(options.groups).forEach(([name, config]) => {
+                const groupElements = Array.from(document.querySelectorAll(`[data-move-group="${name}"]`))
+
+                if (groupElements.length === 0) return
+
                 rules.push({
                     media: config.media,
                     to: config.to,
@@ -144,7 +169,11 @@ class ResponsiveDOMMover {
                     wrapInContainer: config.wrapInContainer,
                     containerClass: config.containerClass,
                     animateAsOne: config.animateAsOne,
-                    items: document.querySelectorAll(`[data-move-group="${name}"]`)
+                    items: groupElements.map(el => ({
+                        selector: `[data-move-id="${ResponsiveDOMMover.uid(el)}"]`,
+                        element: el,
+                        groupOrder: Number(el.dataset.moveGroupOrder || 0)
+                    }))
                 })
             })
         }
@@ -237,6 +266,7 @@ class ResponsiveDOMMover {
         this.items = new Map()
         this.clones = new Map()
         this.groups = new Map()
+        this.swaps = new Map()
         this.activeRules = new Set()
         this.mqls = []
         this.observer = null
@@ -293,7 +323,7 @@ class ResponsiveDOMMover {
         if (!rule.media) {
             throw new Error('Rule must have a media query')
         }
-        if (!rule.to && !rule.swap) {
+        if (!rule.to && !rule.isGroup && !rule.items?.some(i => i.swap)) {
             throw new Error('Rule must have a target selector or swap target')
         }
         if (!rule.isGroup && !Array.isArray(rule.items)) {
@@ -346,7 +376,7 @@ class ResponsiveDOMMover {
                 }
 
                 if (item.swap) {
-                    this._swapElements(el, item.swap)
+                    this._swapElements(el, item.swap, rule)
                 } else if (item.intersect && this.options.intersectionObserver) {
                     this._observeIntersection(el, rule, item)
                 } else {
@@ -366,49 +396,65 @@ class ResponsiveDOMMover {
     }
 
     _activateGroup(rule) {
-        const elements = Array.from(rule.items).map(item => {
-            return typeof item === 'object' ? document.querySelector(item.selector) : item
-        }).filter(Boolean)
+        const elements = []
 
-        if (elements.length === 0) return
+        rule.items.forEach(item => {
+            const el = item.element || document.querySelector(item.selector)
+            if (el) elements.push({ el, order: item.groupOrder || 0 })
+        })
+
+        if (elements.length === 0) {
+            this._log('Group has no elements:', rule.groupName)
+            return
+        }
 
         if (rule.keepOrder !== false) {
-            elements.sort((a, b) => {
-                const orderA = Number(a.dataset.moveGroupOrder || 0)
-                const orderB = Number(b.dataset.moveGroupOrder || 0)
-                return orderA - orderB
-            })
+            elements.sort((a, b) => a.order - b.order)
         }
 
         const groupId = rule.groupName || `group-${Date.now()}`
-        this.groups.set(groupId, {
-            elements,
+
+        const groupData = {
+            elements: elements.map(e => e.el),
             rule,
-            container: null
+            container: null,
+            originalPositions: new Map()
+        }
+
+        elements.forEach(({ el }) => {
+            groupData.originalPositions.set(el, {
+                parent: el.parentNode,
+                nextSibling: el.nextSibling
+            })
         })
+
+        this.groups.set(groupId, groupData)
+
+        const target = this._findTarget(rule.to)
+        if (!target) {
+            this._log('Group target not found:', rule.to)
+            return
+        }
 
         if (rule.wrapInContainer) {
             const container = document.createElement('div')
             container.className = rule.containerClass || 'rdm-group-container'
             container.dataset.groupId = groupId
+            target.appendChild(container)
 
-            const target = this._findTarget(rule.to)
-            if (target) {
-                target.appendChild(container)
+            elements.forEach(({ el }) => {
+                this._moveElement(el, rule, { position: 'last', isGroupItem: true }, container)
+            })
 
-                elements.forEach(el => {
-                    this._moveElement(el, rule, { position: 'last' }, container)
-                })
-
-                this.groups.get(groupId).container = container
-            }
+            this.groups.get(groupId).container = container
         } else {
-            elements.forEach(el => {
-                this._moveElement(el, rule, { position: 'last' })
+            elements.forEach(({ el }) => {
+                this._moveElement(el, rule, { position: 'last', isGroupItem: true }, target)
             })
         }
 
-        rule.onGroupMove?.({ elements, groupId })
+        rule.onGroupMove?.({ elements: elements.map(e => e.el), groupId })
+        this._dispatch('groupMove', { elements: elements.map(e => e.el), groupId, rule })
     }
 
     _deactivateRule(rule) {
@@ -422,6 +468,15 @@ class ResponsiveDOMMover {
             rule.items.forEach(item => {
                 const el = document.querySelector(item.selector)
                 if (!el) return
+
+                if (item.swap) {
+                    const el2 = document.querySelector(item.swap)
+                    if (el2) {
+                        const swapKey = `${el.dataset.moveId}-${el2.dataset.moveId || ResponsiveDOMMover.uid(el2)}`
+                        this._restoreSwap(swapKey)
+                    }
+                    return
+                }
 
                 const data = this.items.get(el)
                 if (data && data.rule === rule) {
@@ -446,10 +501,23 @@ class ResponsiveDOMMover {
         }
 
         group.elements.forEach(el => {
-            this._restoreElement(el)
+            const originalPos = group.originalPositions.get(el)
+            if (originalPos && originalPos.parent) {
+                if (originalPos.nextSibling && originalPos.nextSibling.parentNode === originalPos.parent) {
+                    originalPos.parent.insertBefore(el, originalPos.nextSibling)
+                } else {
+                    originalPos.parent.appendChild(el)
+                }
+
+                this.items.delete(el)
+                this._log('Group element restored to original position:', el)
+            } else {
+                this._restoreElement(el)
+            }
         })
 
         this.groups.delete(groupId)
+        this._dispatch('groupRestore', { groupId, rule })
     }
 
     _evaluateCondition(condition) {
@@ -469,7 +537,7 @@ class ResponsiveDOMMover {
         return Boolean(condition)
     }
 
-    _swapElements(el1Selector, el2Selector) {
+    _swapElements(el1Selector, el2Selector, rule = null) {
         const el1 = typeof el1Selector === 'string' ? document.querySelector(el1Selector) : el1Selector
         const el2 = document.querySelector(el2Selector)
 
@@ -478,25 +546,88 @@ class ResponsiveDOMMover {
             return
         }
 
+        const swapKey = `${ResponsiveDOMMover.uid(el1)}-${ResponsiveDOMMover.uid(el2)}`
+
+        if (this.swaps.has(swapKey)) {
+            this._log('Swap: Already swapped, skipping')
+            return
+        }
+
         const parent1 = el1.parentNode
         const next1 = el1.nextSibling
         const parent2 = el2.parentNode
         const next2 = el2.nextSibling
 
-        if (next1) {
-            parent1.insertBefore(el2, next1)
+        this.swaps.set(swapKey, {
+            el1,
+            el2,
+            parent1,
+            next1,
+            parent2,
+            next2,
+            rule,
+            swappedAt: Date.now()
+        })
+
+        if (next1 === el2) {
+            parent1.insertBefore(el2, el1)
+        } else if (next2 === el1) {
+            parent2.insertBefore(el1, el2)
         } else {
-            parent1.appendChild(el2)
+            const temp = document.createComment('swap-temp')
+            parent1.insertBefore(temp, el1)
+
+            if (next2) {
+                parent2.insertBefore(el1, next2)
+            } else {
+                parent2.appendChild(el1)
+            }
+
+            if (next1) {
+                parent1.insertBefore(el2, next1)
+            } else {
+                parent1.appendChild(el2)
+            }
+
+            temp.remove()
         }
 
-        if (next2) {
-            parent2.insertBefore(el1, next2)
-        } else {
-            parent2.appendChild(el1)
-        }
-
-        this._dispatch('swap', { element1: el1, element2: el2 })
+        this._dispatch('swap', { element1: el1, element2: el2, rule })
         this._log('Swapped elements:', el1, el2)
+    }
+
+    _restoreSwap(swapKey) {
+        const swapData = this.swaps.get(swapKey)
+        if (!swapData) return
+
+        const { el1, el2, parent1, next1, parent2, next2 } = swapData
+
+        if (next1 === el2) {
+            parent1.insertBefore(el2, el1)
+        } else if (next2 === el1) {
+            parent2.insertBefore(el1, el2)
+        } else {
+            const temp = document.createComment('swap-restore-temp')
+            el1.parentNode.insertBefore(temp, el1)
+
+            if (next1 && next1.parentNode) {
+                parent1.insertBefore(el1, next1)
+            } else {
+                parent1.appendChild(el1)
+            }
+
+            if (next2 && next2.parentNode) {
+                parent2.insertBefore(el2, next2)
+            } else {
+                parent2.appendChild(el2)
+            }
+
+            temp.remove()
+        }
+
+        this.swaps.delete(swapKey)
+        this._dispatch('swapRestore', { element1: el1, element2: el2 })
+        this._log('Restored swap:', el1, el2)
     }
 
     _setupIntersectionObserver() {
